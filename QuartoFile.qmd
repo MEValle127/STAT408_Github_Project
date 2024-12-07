@@ -1,0 +1,475 @@
+---
+title: "Red Wine Stati-nova"
+author: "Madeline Snedden"
+format: html
+editor: visual
+---
+
+## Dataset
+
+A dataset on red wine quality was downloaded from <https://archive.ics.uci.edu/dataset/186/wine+quality>. The dataset was originally published in "Modeling wine preferences by data mining from physicochemical properties," by By P. Cortez, A. Cerdeira, Fernando Almeida, Telmo Matos, J. Reis. 2009. Decision Support Systems. Though the original paper examined both red and white wine variants of the Portuguese "Vinho Verde" wine, for this project I will only consider the red wine dataset.
+
+The dataset contains the following variables:
+
+-   fixed.acidity - tartaric acid ($g/dm^3$)
+
+-   volatile.acidity - acetic acid ($g/dm^3$)
+
+-   citric.acid ($g/dm^3$)
+
+-   residual.sugar ($g/dm^3$)
+
+-   chlorides - sodium chloride ($g/dm^3$)
+
+-   free.sulfur.dioxide ($mg/dm^3$)
+
+-   total.sulfur.dioxide ($mg/dm^3$)
+
+-   density ($g/cm^3$)
+
+-   pH
+
+-   sulphates - potassium sulfphate ($g/dm^3$)
+
+-   alcohol (% vol.)
+
+-   quality - a subjective score between 0 and 10 based on sensory data
+
+Due to privacy concerns, potentially identifying information about the wine, such as grape variety, region grown, brand, or price, are not available.
+
+## Getting to know the variables
+
+```{r}
+wine <- read.csv("Data/winequality-red.csv")
+summary(wine)
+library(tidyverse)
+hist(wine$quality, breaks=c(0.5:9.5))
+mean(wine$quality)
+sd(wine$quality)
+max(wine$quality)
+min(wine$quality)
+median(wine$quality)
+IQR(wine$quality)
+
+nrow(wine[wine$quality >4 & wine$quality <7,])/nrow(wine)
+
+
+library(reshape2)
+boxwine <- melt(wine)
+library(ggplot2)
+ggplot(boxwine, aes(factor(variable),value)) +
+  geom_boxplot() +
+  facet_wrap(~variable,scale="free", ncol=4)
+
+pairs(wine)
+
+```
+
+Looking at distribution of each variable and its correlation with the outcome variable, quality.
+
+#### Fixed Acidity
+
+```{r}
+hist(wine$fixed.acidity)
+ggplot(aes(x=fixed.acidity, y=quality), data=wine) + geom_point()
+```
+
+fixed.acidity is roughly normally distributed with some right skew. It does not appear to have any relationship with quality.
+
+#### Volatile Acidity
+
+```{r}
+hist(wine$volatile.acidity) 
+ggplot(aes(x=volatile.acidity, y=quality), data=wine) + geom_point()
+```
+
+volatile.acidity is roughly normally distributed with some right skew. There may be a slight negative correlation between the two variables, but it is likely not linear - I might include cubic terms here.
+
+#### Citric Acid
+
+```{r}
+hist(wine$citric.acid) 
+ggplot(aes(x=citric.acid, y=quality), data=wine) + geom_point()
+```
+
+citric.acid is NOT normally distributed - many wines have very low amounts of citric acid, so it is bounded by 0 $g/dm^3$ on the left. There is no apparent relationship between citric.acid and quality.
+
+#### Residual Sugar
+
+```{r}
+hist(wine$residual.sugar) 
+ggplot(aes(x=residual.sugar, y=quality), data=wine) + geom_point()
+```
+
+residual.sugar has a very positively skewed distribution with no clear relationship to quality.
+
+#### Chlorides
+
+```{r}
+hist(wine$chlorides) 
+ggplot(aes(x=chlorides, y=quality), data=wine) + geom_point()
+```
+
+chlorides is extremely leptokurtic with positive skew. Wines with higher concentrations of chlorides appear to have been rated as lower quality, but the relationship may not be linear - I would include cubic terms.
+
+#### Free Sulfur Dioxide
+
+```{r}
+hist(wine$free.sulfur.dioxide) 
+ggplot(aes(x=free.sulfur.dioxide, y=quality), data=wine) + geom_point()
+```
+
+free.sulfur.dioxide has positive skew, with very little bearing on wine qualitiy.
+
+#### Total Sulfur Dioxide
+
+```{r}
+hist(wine$total.sulfur.dioxide) 
+ggplot(aes(x=total.sulfur.dioxide, y=quality), data=wine) + geom_point()
+```
+
+fixed.acidity is roughly normally distributed with some right skew. It does not appear to have any relationship with quality.
+
+#### Density
+
+```{r}
+hist(wine$density) 
+ggplot(aes(x=density, y=quality), data=wine) + geom_point()
+```
+
+fixed.acidity is roughly normally distributed with some right skew. It does not appear to have any relationship with quality.
+
+#### pH
+
+```{r}
+hist(wine$pH) 
+ggplot(aes(x=pH, y=quality), data=wine) + geom_point()
+```
+
+fixed.acidity is roughly normally distributed with some right skew. It does not appear to have any relationship with quality.
+
+#### Sulphates
+
+```{r}
+hist(wine$sulphates) 
+ggplot(aes(x=sulphates, y=quality), data=wine) + geom_point()
+```
+
+fixed.acidity is roughly normally distributed with some right skew. It does not appear to have any relationship with quality.
+
+#### Alcohol
+
+```{r}
+hist(wine$alcohol) 
+ggplot(aes(x=alcohol, y=quality), data=wine) + geom_point()
+```
+
+fixed.acidity is roughly normally distributed with some right skew. It does not appear to have any relationship with quality.
+
+## Variable Selection
+
+Here's the maximum model including all predictor variables:
+
+```{r}
+mod_max <- lm(quality ~ .*., data=wine)
+summary(mod_max)
+plot(mod_max)
+mod_best <- step(mod_max, direction="both",trace=0)
+summary(mod_best)
+```
+
+You can add options to executable code like this
+
+```{r}
+library(car)
+vif(mod_best)
+plot(mod_best)
+library(lmtest)
+bptest(mod_best)
+ks.test(residuals(mod_best),"pnorm",sd=summary(mod_best)$s)
+
+# Identify top VIF offenders
+max_vif <- function(x) {
+  vifac <- data.frame(vif(x))
+  nameofmax <- rownames(which(vifac == max(vifac), arr.ind = TRUE))
+  return(nameofmax)
+}
+
+max_vif(mod_best)
+
+# Remove variables with highest VIF from model until no variables with VIF >10 remain
+while(max(vif(mod_best))>10){
+  rm_var <- max_vif(mod_best)
+  mod_best <- update(mod_best,paste0(".~. - ", rm_var))
+}
+summary(mod_best)
+vif(mod_best)
+plot(mod_best)
+bptest(mod_best)
+ks.test(residuals(mod_best),"pnorm",sd=summary(mod_best)$s)
+
+# Remove observation 833, 653
+wine_new <- wine[-833,]
+mod_max <- lm(quality ~ .*., data=wine_new)
+mod_best <- step(mod_max, direction="both",trace=0)
+
+while(max(vif(mod_best))>10){
+  rm_var <- max_vif(mod_best)
+  mod_best <- update(mod_best,paste0(".~. - ", rm_var))
+}
+summary(mod_best)
+vif(mod_best)
+plot(mod_best)
+bptest(mod_best)
+ks.test(residuals(mod_best),"pnorm",sd=summary(mod_best)$s)
+
+wine_new <- wine[-653,]
+mod_max <- lm(quality ~ .*., data=wine_new)
+mod_best <- step(mod_max, direction="both",trace=0)
+
+while(max(vif(mod_best))>10){
+  rm_var <- max_vif(mod_best)
+  mod_best <- update(mod_best,paste0(".~. - ", rm_var))
+}
+summary(mod_best)
+vif(mod_best)
+plot(mod_best)
+bptest(mod_best)
+ks.test(residuals(mod_best),"pnorm",sd=summary(mod_best)$s)
+AIC(mod_best)
+```
+
+Clearly this isn't an appropriate model - assumptions of normality and homoscedasticity are violated, and I don't think a transformation will be enough to fix it.
+
+## Transformation
+
+Rather than using an 11-point Likert scale as the outcome variable, let's instead set a threshold of a quality rating of 7 or higher being a "good" wine, and lower ratings are not good.
+
+```{r}
+
+mod_max <- lm(log(quality) ~ .*., data=wine)
+mod_best <- step(mod_max, direction="both",trace=0)
+
+while(max(vif(mod_best))>10){
+  rm_var <- max_vif(mod_best)
+  mod_best <- update(mod_best,paste0(".~. - ", rm_var))
+}
+summary(mod_best)
+vif(mod_best)
+plot(mod_best)
+bptest(mod_best)
+ks.test(residuals(mod_best),"pnorm",sd=summary(mod_best)$s)
+AIC(mod_best)
+```
+
+## Poisson Regression
+
+Rather than using an 11-point Likert scale as the outcome variable, let's instead set a threshold of a quality rating of 7 or higher being a "good" wine, and lower ratings are not good.
+
+```{r}
+mod_psn_max <- glm(quality ~ .*., wine,family=poisson)
+mod_psn_best <- step(mod_psn_max, direction="both",trace=0)
+summary(mod_psn_best)
+vif(mod_psn_best)
+
+while(max(vif(mod_psn_best))>10){
+  rm_var <- max_vif(mod_psn_best)
+  mod_psn_best <- update(mod_psn_best,paste0(".~. - ", rm_var))
+}
+summary(mod_psn_best)
+vif(mod_psn_best)
+plot(mod_psn_best)
+bptest(mod_psn_best)
+
+# Remove observation 833, then 653
+wine_new <- wine[-833,]
+mod_psn_max <- glm(quality ~ .*., wine_new,family=poisson)
+mod_psn_best <- step(mod_psn_max, direction="both",trace=0)
+summary(mod_psn_best)
+vif(mod_psn_best)
+
+while(max(vif(mod_psn_best))>10){
+  rm_var <- max_vif(mod_psn_best)
+  mod_psn_best <- update(mod_psn_best,paste0(".~. - ", rm_var))
+}
+summary(mod_psn_best)
+vif(mod_psn_best)
+plot(mod_psn_best)
+bptest(mod_psn_best)
+ks.test(residuals(mod_psn_best),"pnorm",sd=summary(mod_psn_best)$s)
+
+wine_new <- wine_new[-653,]
+mod_psn_max <- glm(quality ~ .*., wine_new,family=poisson)
+mod_psn_best <- step(mod_psn_max, direction="both",trace=0)
+summary(mod_psn_best)
+vif(mod_psn_best)
+
+while(max(vif(mod_psn_best))>10){
+  rm_var <- max_vif(mod_psn_best)
+  mod_psn_best <- update(mod_psn_best,paste0(".~. - ", rm_var))
+}
+summary(mod_psn_best)
+vif(mod_psn_best)
+plot(mod_psn_best)
+bptest(mod_psn_best)
+ks.test(residuals(mod_psn_best),"pnorm",sd=summary(mod_psn_best)$s)
+AIC(mod_psn_best)
+```
+
+## Logistic Regression
+
+Rather than using an 11-point Likert scale as the outcome variable, let's instead set a threshold of a quality rating of 7 or higher being a "good" wine, and lower ratings are not good.
+
+```{r}
+wine2 <- wine %>% mutate(good = 
+                          case_when(quality > 6 ~ 1,
+                                    TRUE ~ 0))
+wine2 <- wine2 %>% select(-quality)
+summary(wine2)
+```
+
+Now create glm
+
+```{r}
+mod_glm_max <- glm(good ~ .*.,
+           wine2,
+           family = binomial)
+
+mod_glm_best <- step(mod_glm_max, direction="both",trace=0)
+summary(mod_glm_best)
+vif(mod_glm_best)
+
+while(max(vif(mod_glm_best))>10){
+  rm_var <- max_vif(mod_glm_best)
+  mod_glm_best <- update(mod_glm_best,paste0(".~. - ", rm_var))
+}
+summary(mod_glm_best)
+vif(mod_glm_best)
+plot(mod_glm_best)
+bptest(mod_glm_best)
+
+wine2_new <- wine2[-653,]
+mod_glm_max <- glm(good ~ .*.,
+           wine2_new,
+           family = binomial)
+
+mod_glm_best <- step(mod_glm_max, direction="both",trace=0)
+summary(mod_glm_best)
+vif(mod_glm_best)
+
+while(max(vif(mod_glm_best))>10){
+  rm_var <- max_vif(mod_glm_best)
+  mod_glm_best <- update(mod_glm_best,paste0(".~. - ", rm_var))
+}
+summary(mod_glm_best)
+vif(mod_glm_best)
+plot(mod_glm_best)
+bptest(mod_glm_best)
+ks.test(residuals(mod_glm_best),"pnorm",sd=summary(mod_glm_best)$s)
+AIC(mod_glm_best)
+```
+
+assumptions
+
+```{r}
+plot(mod_glm_best)
+```
+
+## Ordinal Logistic Regression
+
+Because the response variable is akin to a Likert scale, ordinal logistic regression is probably a better fit than the above model.
+
+```{r}
+library(foreign)
+library(MASS)
+mod_ord <- polr(as.factor(quality) ~ .*., wine,Hess=TRUE)
+summary(mod_ord)
+
+mod_ord_best <- step(mod_ord, direction="both",trace=0)
+summary(mod_ord_best)
+vif(mod_ord_best)
+
+# Not able to proceed with NaNs included - seem to be induced by free.sulfur.dioxide:total.sulfur.dioxide, so that interaction needs to be removed from the model and rerun
+rm_var <- "free.sulfur.dioxide:total.sulfur.dioxide"
+mod_ord_nextbest <- update(mod_ord_best,paste0(".~. - ", rm_var))
+summary(mod_ord_nextbest)
+vif(mod_ord_nextbest)
+
+# Ordinarily I'd used a max VIF of 10, but with that there are SIGNIFICANT multicollinearity problems left in the model (between density and alcohol, for instance, which is practically a linear function on its own), so I set a ceiling of 5 instead
+while(max(vif(mod_ord_nextbest))>5){
+  rm_var <- max_vif(mod_ord_nextbest)
+  mod_ord_nextbest <- update(mod_ord_nextbest,paste0(".~. - ", rm_var))
+}
+summary(mod_ord_nextbest)
+vif(mod_ord_nextbest)
+pairs(profile(mod_ord_nextbest)) # visualizes which pairs of terms are multicollinear
+
+library(PResiduals)
+pres <- presid(mod_ord_nextbest)
+
+library(sure)
+library(ggplot2)
+p1 <- ggplot(data.frame(x=resids(mod_ord_nextbest), y=pres), aes(x,y)) +
+  geom_point(color="#444444",shape=19,size=2,alpha=0.5) +
+  geom_smooth(color="red",se=FALSE) +
+  ylab("Probability-scale residual")
+
+p2 <- ggplot(data.frame(y=pres),aes(sample=y)) +
+  stat_qq(distribution=qunif,dparams=list(min=-1,max=1),alpha=0.5) +
+  geom_qq_line(distribution=qunif,dparams=list(min=-1,max=1)) + 
+  xlab("Sample quantile") +
+  ylab("Theoretical quantile")
+
+p1
+p2
+
+
+
+fit.probit <- polr(as.factor(quality) ~ .*., data = wine, method = "probit")
+fit.logistic <- polr(as.factor(quality) ~ .*., data = wine, method = "logistic")
+fit.loglog <- polr(as.factor(quality) ~ .*., data = wine, method = "loglog") # correct link
+
+# Construct Q-Q plots of the surrogate residuals for each model
+set.seed(1056) # for reproducibility
+p1 <- autoplot(fit.probit, nsim = 100, what = "qq")
+p2 <- autoplot(fit.logistic, nsim = 100, what = "qq")
+p3 <- autoplot(fit.loglog, nsim = 100, what = "qq")
+
+
+
+# Create null model to run the Chi-square test
+mod_ord_null <- polr(as.factor(quality) ~ 1, wine,Hess=TRUE)
+
+
+summary(mod_ord_nextbest)
+
+confint(profile(mod_ord_nextbest)) # 95% CI for betas
+exp(confint(profile(mod_ord_nextbest))) # 95% CI for betas
+
+X <- summary(mod_ord_null)$deviance - summary(mod_ord_nextbest)$deviance
+p <- pchisq(X,df=9,lower.tail=FALSE)
+c(X,p)
+
+rsq <- (summary(mod_ord_null)$deviance - summary(mod_ord_nextbest)$deviance)/summary(mod_ord_null)$deviance
+rsq
+
+```
+
+Problem: This method of variable selection is flawed. It would be better to implement LASSO as a variable selection procedure.
+
+Making predictions to check interpretation:
+
+```{r}
+newdat11 <- data.frame(fixed.acidity = 8, volatile.acidity=0.45, citric.acid=0.25, residual.sugar=3, chlorides=0.09, free.sulfur.dioxide=15, total.sulfur.dioxide=40, density=0.996, pH=3.30, sulphates=0.6, alcohol=11)
+
+newdat12 <- data.frame(fixed.acidity = 8, volatile.acidity=0.45, citric.acid=0.25, residual.sugar=3, chlorides=0.09, free.sulfur.dioxide=15, total.sulfur.dioxide=40, density=0.996, pH=3.30, sulphates=0.6, alcohol=12)
+
+newdat13 <- data.frame(fixed.acidity = 8, volatile.acidity=0.45, citric.acid=0.25, residual.sugar=3, chlorides=0.09, free.sulfur.dioxide=15, total.sulfur.dioxide=40, density=0.996, pH=3.30, sulphates=0.6, alcohol=13)
+
+newdat14 <- data.frame(fixed.acidity = 8, volatile.acidity=0.45, citric.acid=0.25, residual.sugar=3, chlorides=0.09, free.sulfur.dioxide=15, total.sulfur.dioxide=40, density=0.996, pH=3.30, sulphates=0.6, alcohol=14)
+
+predict(mod_ord_nextbest, newdat11, type="p")
+predict(mod_ord_nextbest, newdat12, type="p")
+predict(mod_ord_nextbest, newdat13, type="p")
+predict(mod_ord_nextbest, newdat14, type="p")
+```
